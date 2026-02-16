@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getMessages } from "@/lib/api";
 import type { Message, PaginatedResponse } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,8 @@ import {
   Video,
   FileText,
   Music,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
 
 export default function MessagesPage() {
@@ -39,6 +41,7 @@ export default function MessagesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Message | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<Message | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -178,12 +181,24 @@ export default function MessagesPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      {msg.has_media === "TRUE" && (
+                      {msg.has_media === "True" && msg.media_urls ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 px-2 text-xs text-primary hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMediaPreview(msg);
+                          }}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {mediaIcon(msg.media_type)}
+                        </Button>
+                      ) : msg.has_media === "True" ? (
                         <Badge variant="secondary" className="gap-1 text-[11px]">
                           {mediaIcon(msg.media_type)}
-                          {msg.media_type?.split("/")[0] || "media"}
                         </Badge>
-                      )}
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -243,28 +258,116 @@ export default function MessagesPage() {
                 <span className="whitespace-pre-wrap">
                   {selected.message_text || "-"}
                 </span>
-                {selected.has_media === "TRUE" && (
+                {selected.has_media === "True" && (
                   <>
                     <span className="text-muted-foreground">Media</span>
-                    <span>{selected.media_type}</span>
-                    {selected.media_urls && (
-                      <>
-                        <span className="text-muted-foreground">Media URL</span>
-                        <a
-                          href={selected.media_urls}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary underline break-all"
-                        >
-                          {selected.media_urls}
-                        </a>
-                      </>
-                    )}
+                    <div className="space-y-2">
+                      <Badge variant="secondary" className="gap-1">
+                        {mediaIcon(selected.media_type)}
+                        {selected.media_type || "media"}
+                      </Badge>
+                      {selected.media_urls && (
+                        <div className="flex gap-2">
+                          {selected.media_type?.startsWith("image") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setSelected(null);
+                                setMediaPreview(selected);
+                              }}
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1" />
+                              Preview
+                            </Button>
+                          )}
+                          <a
+                            href={selected.media_urls}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button variant="outline" size="sm" className="h-7 text-xs">
+                              <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                              Open
+                            </Button>
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
                 <span className="text-muted-foreground">ID</span>
                 <span className="font-mono text-xs break-all">{selected.id}</span>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Media Preview Dialog */}
+      <Dialog open={!!mediaPreview} onOpenChange={() => setMediaPreview(null)}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+          {mediaPreview && (
+            <div>
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Badge variant="secondary" className="gap-1 shrink-0">
+                    {mediaIcon(mediaPreview.media_type)}
+                    {mediaPreview.media_type || "media"}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground truncate">
+                    {mediaPreview.sender_name} &middot; {mediaPreview.group_name}
+                  </span>
+                </div>
+                <a
+                  href={mediaPreview.media_urls}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                    Open original
+                  </Button>
+                </a>
+              </div>
+              <div className="flex items-center justify-center bg-black/90 min-h-[300px] max-h-[70vh]">
+                {mediaPreview.media_type?.startsWith("image") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mediaPreview.media_urls}
+                    alt={`Media from ${mediaPreview.sender_name}`}
+                    className="max-w-full max-h-[70vh] object-contain"
+                  />
+                ) : mediaPreview.media_type?.startsWith("video") ? (
+                  <video
+                    src={mediaPreview.media_urls}
+                    controls
+                    className="max-w-full max-h-[70vh]"
+                  />
+                ) : mediaPreview.media_type?.startsWith("audio") ? (
+                  <div className="p-8">
+                    <audio src={mediaPreview.media_urls} controls />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-3" />
+                    <a
+                      href={mediaPreview.media_urls}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      Download file
+                    </a>
+                  </div>
+                )}
+              </div>
+              {mediaPreview.message_text && (
+                <div className="px-4 py-3 border-t text-sm">
+                  {mediaPreview.message_text}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
