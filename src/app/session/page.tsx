@@ -37,13 +37,35 @@ export default function SessionPage() {
     }
   }, []);
 
+  const loadQr = useCallback(async (retries = 3) => {
+    setQrLoading(true);
+    for (let i = 0; i < retries; i++) {
+      try {
+        const url = await fetchQrCode();
+        setQrUrl(url);
+        setQrLoading(false);
+        return;
+      } catch {
+        if (i < retries - 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+    }
+    setQrLoading(false);
+    toast.error("Failed to load QR code. Try clicking Refresh.");
+  }, []);
+
   useEffect(() => {
     loadSession();
   }, [loadSession]);
 
-  // Auto-poll when waiting for QR scan
+  // Auto-load QR and poll when waiting for QR scan
   useEffect(() => {
     if (session?.status !== "SCAN_QR_CODE") return;
+    // Auto-load QR code when entering scan state
+    if (!qrUrl && !qrLoading) {
+      loadQr();
+    }
     const interval = setInterval(async () => {
       const data = await loadSession();
       if (data?.status === "WORKING") {
@@ -52,15 +74,16 @@ export default function SessionPage() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [session?.status, loadSession]);
+  }, [session?.status, loadSession, qrUrl, qrLoading, loadQr]);
 
   const handleStart = async () => {
     setActionLoading(true);
     try {
       await startSession();
-      toast.success("Session started — loading QR code...");
+      toast.success("Session started — waiting for QR code...");
+      // Give WAHA time to generate QR code
+      await new Promise((r) => setTimeout(r, 3000));
       await loadSession();
-      await loadQr();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to start session");
     } finally {
@@ -73,27 +96,14 @@ export default function SessionPage() {
     setQrUrl(null);
     try {
       await restartSession();
-      toast.success("Session restarted — loading QR code...");
-      // Wait for session to be ready
+      toast.success("Session restarted — waiting for QR code...");
+      // Give WAHA time to generate QR code
       await new Promise((r) => setTimeout(r, 3000));
       await loadSession();
-      await loadQr();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to restart session");
     } finally {
       setActionLoading(false);
-    }
-  };
-
-  const loadQr = async () => {
-    setQrLoading(true);
-    try {
-      const url = await fetchQrCode();
-      setQrUrl(url);
-    } catch {
-      toast.error("Failed to load QR code. Session may not be ready yet.");
-    } finally {
-      setQrLoading(false);
     }
   };
 
@@ -105,6 +115,8 @@ export default function SessionPage() {
   const status = String(session?.status || "UNKNOWN");
   const isConnected = status === "WORKING";
   const isWaitingQr = status === "SCAN_QR_CODE";
+  const isFailed = status === "FAILED";
+  const needsNewSession = status === "NOT_FOUND" || status === "UNKNOWN";
   const phone = session?.me
     ? (session.me as Record<string, string>)?.id?.split("@")[0]
     : null;
@@ -179,7 +191,7 @@ export default function SessionPage() {
 
           {/* Actions */}
           <div className="flex gap-2">
-            {!isConnected && !isWaitingQr && (
+            {needsNewSession && (
               <Button onClick={handleStart} disabled={actionLoading}>
                 {actionLoading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -189,10 +201,10 @@ export default function SessionPage() {
                 Start Session
               </Button>
             )}
-            {(isConnected || isWaitingQr) && (
+            {(isConnected || isWaitingQr || isFailed) && (
               <Button
-                variant="outline"
-                onClick={handleRestart}
+                variant={isFailed ? "default" : "outline"}
+                onClick={isFailed ? handleStart : handleRestart}
                 disabled={actionLoading}
               >
                 {actionLoading ? (
@@ -200,7 +212,7 @@ export default function SessionPage() {
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                Restart Session
+                {isFailed ? "Reconnect" : "Restart Session"}
               </Button>
             )}
           </div>
@@ -239,7 +251,7 @@ export default function SessionPage() {
                 ) : (
                   <div className="flex h-64 w-64 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border">
                     <QrCode className="h-10 w-10 text-muted-foreground" />
-                    <Button variant="outline" size="sm" onClick={loadQr}>
+                    <Button variant="outline" size="sm" onClick={() => loadQr()}>
                       Load QR Code
                     </Button>
                   </div>
