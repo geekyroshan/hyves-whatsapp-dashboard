@@ -44,6 +44,7 @@ export default function GroupsPage() {
   >([]);
   const [newGroupId, setNewGroupId] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
+  const [discoverSearch, setDiscoverSearch] = useState("");
 
   const load = async () => {
     try {
@@ -85,9 +86,16 @@ export default function GroupsPage() {
     }
   };
 
+  const filteredDiscovered = discovered.filter(
+    (g) =>
+      g.group_name.toLowerCase().includes(discoverSearch.toLowerCase()) ||
+      g.group_id.toLowerCase().includes(discoverSearch.toLowerCase())
+  );
+
   const handleDiscover = async () => {
     setDiscoverLoading(true);
     setDiscoverOpen(true);
+    setDiscoverSearch("");
     try {
       const result = await discoverGroups();
       if (result.success) {
@@ -145,14 +153,14 @@ export default function GroupsPage() {
           <div>
             <p className="text-sm font-medium">
               Filter Mode:{" "}
-              <Badge variant="secondary" className="ml-1">
-                {filterMode === "allow_all" ? "Allow All" : "Allowlist"}
+              <Badge variant={filterMode === "allow_none" ? "destructive" : "default"} className="ml-1">
+                {filterMode === "allow_none" ? "No Groups Selected" : "Allowlist"}
               </Badge>
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {filterMode === "allow_all"
-                ? "No groups in allowlist — all groups are being scraped. Add groups to only scrape specific ones."
-                : `Only ${groups.length} group(s) in the allowlist are being scraped. Remove all to scrape everything.`}
+              {filterMode === "allow_none"
+                ? "No groups selected — nothing is being scraped. Use \"Discover\" to find and add groups to start scraping."
+                : `${groups.length} group(s) in the allowlist are being scraped.`}
             </p>
           </div>
         </CardContent>
@@ -169,10 +177,10 @@ export default function GroupsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Filter className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-lg font-medium">No groups in allowlist</p>
+            <p className="text-lg font-medium">No groups selected</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-              All groups are being scraped. Use &quot;Discover&quot; to find groups from
-              WhatsApp, or manually add a group ID.
+              No groups are being scraped. Use &quot;Discover&quot; to find and select
+              groups from WhatsApp to start scraping.
             </p>
           </CardContent>
         </Card>
@@ -272,38 +280,58 @@ export default function GroupsPage() {
               No groups found. Make sure WhatsApp is connected.
             </p>
           ) : (
-            <div className="space-y-2">
-              {discovered.map((g) => (
-                <div
-                  key={g.group_id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{g.group_name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {g.participant_count} members
-                    </p>
+            <div className="space-y-3">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search groups by name..."
+                  value={discoverSearch}
+                  onChange={(e) => setDiscoverSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {filteredDiscovered.length} of {discovered.length} groups
+                {discoverSearch && ` matching "${discoverSearch}"`}
+              </p>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {filteredDiscovered.map((g) => (
+                  <div
+                    key={g.group_id}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{g.group_name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {g.participant_count} members
+                      </p>
+                    </div>
+                    {existingIds.has(g.group_id) ? (
+                      <Badge variant="secondary" className="gap-1 shrink-0">
+                        <CheckCircle className="h-3 w-3" />
+                        Added
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() =>
+                          handleAddDiscovered(g.group_id, g.group_name)
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add
+                      </Button>
+                    )}
                   </div>
-                  {existingIds.has(g.group_id) ? (
-                    <Badge variant="secondary" className="gap-1 shrink-0">
-                      <CheckCircle className="h-3 w-3" />
-                      Added
-                    </Badge>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      onClick={() =>
-                        handleAddDiscovered(g.group_id, g.group_name)
-                      }
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Add
-                    </Button>
-                  )}
-                </div>
-              ))}
+                ))}
+                {filteredDiscovered.length === 0 && discoverSearch && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    No groups matching &quot;{discoverSearch}&quot;
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
