@@ -31,8 +31,11 @@ import {
   Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConnection } from "@/hooks/use-connection";
+import { ConnectPrompt } from "@/components/connect-prompt";
 
 export default function GroupsPage() {
+  const { connected, loading: connLoading } = useConnection();
   const [groups, setGroups] = useState<FilterGroup[]>([]);
   const [filterMode, setFilterMode] = useState("allow_all");
   const [loading, setLoading] = useState(true);
@@ -60,8 +63,9 @@ export default function GroupsPage() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (connected) load();
+    else if (connected === false) setLoading(false);
+  }, [connected]);
 
   const handleAdd = async () => {
     if (!newGroupId) return;
@@ -139,6 +143,36 @@ export default function GroupsPage() {
   };
 
   const existingIds = new Set(groups.map((g) => g.group_id));
+
+  if (connLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Groups</h2>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+        <div className="p-6 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Groups</h2>
+          <p className="text-muted-foreground">
+            Manage which WhatsApp groups to scrape
+          </p>
+        </div>
+        <ConnectPrompt />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

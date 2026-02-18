@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { getMessages } from "@/lib/api";
 import type { Message, PaginatedResponse } from "@/lib/api";
+import { useConnection } from "@/hooks/use-connection";
+import { ConnectPrompt } from "@/components/connect-prompt";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,7 @@ import {
 } from "lucide-react";
 
 export default function MessagesPage() {
+  const { connected, loading: connLoading } = useConnection();
   const [data, setData] = useState<PaginatedResponse<Message> | null>(null);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -44,6 +47,7 @@ export default function MessagesPage() {
   const [mediaPreview, setMediaPreview] = useState<Message | null>(null);
 
   const load = useCallback(async () => {
+    if (!connected) return;
     setLoading(true);
     try {
       const result = await getMessages(page, 30, undefined, search || undefined);
@@ -53,11 +57,12 @@ export default function MessagesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, connected]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (connected) load();
+    else if (connected === false) setLoading(false);
+  }, [connected, load]);
 
   const handleSearch = () => {
     setPage(1);
@@ -86,6 +91,36 @@ export default function MessagesPage() {
     if (type.startsWith("audio")) return <Music className="h-3.5 w-3.5" />;
     return <FileText className="h-3.5 w-3.5" />;
   };
+
+  if (connLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Messages</h2>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+        <div className="p-6 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Messages</h2>
+          <p className="text-muted-foreground">
+            Scraped messages from your WhatsApp groups
+          </p>
+        </div>
+        <ConnectPrompt />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

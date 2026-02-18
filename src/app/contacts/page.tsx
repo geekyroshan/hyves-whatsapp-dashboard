@@ -44,8 +44,11 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useConnection } from "@/hooks/use-connection";
+import { ConnectPrompt } from "@/components/connect-prompt";
 
 export default function ContactsPage() {
+  const { connected, loading: connLoading } = useConnection();
   const [activeTab, setActiveTab] = useState("contacts");
 
   // Message contacts state
@@ -70,6 +73,7 @@ export default function ContactsPage() {
 
   // Load message contacts
   const loadContacts = useCallback(async () => {
+    if (!connected) return;
     setContactsLoading(true);
     try {
       const result = await getContacts(
@@ -83,10 +87,11 @@ export default function ContactsPage() {
     } finally {
       setContactsLoading(false);
     }
-  }, [contactsPage, contactsSearch]);
+  }, [contactsPage, contactsSearch, connected]);
 
   // Load group members
   const loadMembers = useCallback(async () => {
+    if (!connected) return;
     setMembersLoading(true);
     try {
       const result = await getGroupMembers(
@@ -101,19 +106,22 @@ export default function ContactsPage() {
     } finally {
       setMembersLoading(false);
     }
-  }, [membersPage, selectedGroup, membersSearch]);
+  }, [membersPage, selectedGroup, membersSearch, connected]);
 
   useEffect(() => {
-    if (activeTab === "contacts") {
+    if (connected && activeTab === "contacts") {
       loadContacts();
+    } else if (connected === false) {
+      setContactsLoading(false);
+      setMembersLoading(false);
     }
-  }, [activeTab, loadContacts]);
+  }, [connected, activeTab, loadContacts]);
 
   useEffect(() => {
-    if (activeTab === "group-members") {
+    if (connected && activeTab === "group-members") {
       loadMembers();
     }
-  }, [activeTab, loadMembers]);
+  }, [connected, activeTab, loadMembers]);
 
   const handleContactsSearch = () => {
     setContactsPage(1);
@@ -161,6 +169,36 @@ export default function ContactsPage() {
       return ts;
     }
   };
+
+  if (connLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Contacts</h2>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+        <div className="p-6 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!connected) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Contacts</h2>
+          <p className="text-muted-foreground">
+            Contacts from messages and group member syncs
+          </p>
+        </div>
+        <ConnectPrompt />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
