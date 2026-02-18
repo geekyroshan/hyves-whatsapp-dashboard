@@ -45,6 +45,7 @@ export default function GroupsPage() {
   const [newGroupId, setNewGroupId] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [discoverSearch, setDiscoverSearch] = useState("");
+  const [syncingGroupIds, setSyncingGroupIds] = useState<Set<string>>(new Set());
 
   const load = async () => {
     try {
@@ -66,7 +67,7 @@ export default function GroupsPage() {
     if (!newGroupId) return;
     try {
       await addFilterGroup(newGroupId, newGroupName);
-      toast.success("Group added to allowlist");
+      toast.success("Group added. Syncing members...");
       setAddOpen(false);
       setNewGroupId("");
       setNewGroupName("");
@@ -115,10 +116,24 @@ export default function GroupsPage() {
     groupName: string
   ) => {
     try {
+      setSyncingGroupIds((prev) => new Set(prev).add(groupId));
       await addFilterGroup(groupId, groupName, "Added from discovery");
-      toast.success(`Added ${groupName}`);
+      toast.success(`${groupName} added. Syncing members...`);
       load();
+      // Keep syncing indicator visible briefly before switching to "Added" badge
+      setTimeout(() => {
+        setSyncingGroupIds((prev) => {
+          const next = new Set(prev);
+          next.delete(groupId);
+          return next;
+        });
+      }, 2000);
     } catch (e) {
+      setSyncingGroupIds((prev) => {
+        const next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
       toast.error(e instanceof Error ? e.message : "Failed to add group");
     }
   };
@@ -306,7 +321,12 @@ export default function GroupsPage() {
                         {g.participant_count} members
                       </p>
                     </div>
-                    {existingIds.has(g.group_id) ? (
+                    {syncingGroupIds.has(g.group_id) ? (
+                      <Badge variant="outline" className="gap-1 shrink-0 text-blue-600 border-blue-300">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Syncing...
+                      </Badge>
+                    ) : existingIds.has(g.group_id) ? (
                       <Badge variant="secondary" className="gap-1 shrink-0">
                         <CheckCircle className="h-3 w-3" />
                         Added

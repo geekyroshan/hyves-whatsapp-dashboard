@@ -178,3 +178,87 @@ export async function removeFilterGroup(groupId: string) {
 export async function discoverGroups() {
   return apiFetch<DiscoverGroupsResponse>("/filter/discover");
 }
+
+// Current user endpoint
+export interface CurrentUser {
+  phone: string | null;
+  connected: boolean;
+  display: string | null;
+}
+
+export async function getCurrentUser() {
+  return apiFetch<CurrentUser>("/api/session/me");
+}
+
+// Group members endpoints
+export interface GroupMember {
+  phone: string;
+  name: string;
+  group_id: string;
+  group_name: string;
+  role: string;
+  lid: string;
+  synced_at: string;
+}
+
+export interface GroupSummary {
+  group_id: string;
+  group_name: string;
+  member_count: number;
+}
+
+export interface GroupMembersResponse extends PaginatedResponse<GroupMember> {
+  groups_summary: GroupSummary[];
+}
+
+export async function getGroupMembers(
+  page = 1,
+  limit = 100,
+  groupId?: string,
+  search?: string,
+) {
+  return apiFetch<GroupMembersResponse>("/api/group-members", {
+    params: { page, limit, group_id: groupId, search },
+  });
+}
+
+// Export endpoints
+export async function exportGroupMembersCSV(groupId?: string): Promise<void> {
+  const params = new URLSearchParams();
+  if (groupId) params.set("group_id", groupId);
+
+  const url = `${API_URL}/api/export/group-members/csv?${params.toString()}`;
+  const res = await fetch(url, {
+    headers: { "X-Api-Key": API_KEY },
+  });
+
+  if (!res.ok) throw new Error("Failed to export CSV");
+
+  const blob = await res.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  const disposition = res.headers.get("Content-Disposition");
+  a.download = disposition?.split("filename=")[1]?.replace(/"/g, "") || "contacts.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(downloadUrl);
+}
+
+export interface CopyToSheetResponse {
+  success: boolean;
+  message: string;
+  tab_name: string;
+  row_count: number;
+}
+
+export async function copyGroupMembersToSheet(
+  groupId?: string,
+  tabName?: string,
+) {
+  return apiFetch<CopyToSheetResponse>("/api/export/group-members/sheet", {
+    method: "POST",
+    body: JSON.stringify({ group_id: groupId, tab_name: tabName }),
+  });
+}
