@@ -262,3 +262,30 @@ export async function copyGroupMembersToSheet(
     body: JSON.stringify({ group_id: groupId, tab_name: tabName }),
   });
 }
+
+// Sheet access endpoints
+export interface AccessStatus {
+  has_access: boolean;
+  spreadsheet_url: string | null;
+  email: string | null;
+  created_at: string | null;
+}
+
+export interface AccessRequestResponse {
+  success: boolean;
+  message: string;
+  spreadsheet_url: string;
+  email: string;
+  created_at: string;
+}
+
+export async function getAccessStatus() {
+  return apiFetch<AccessStatus>("/api/access/status");
+}
+
+export async function requestSheetAccess(email: string) {
+  return apiFetch<AccessRequestResponse>("/api/access/request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}

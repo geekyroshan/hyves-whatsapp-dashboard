@@ -6,6 +6,7 @@ import type { Stats } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RequestAccessCard } from "@/components/request-access";
 import {
   MessageSquare,
   Users,
@@ -106,6 +107,9 @@ export default function DashboardPage() {
           </Badge>
         </CardContent>
       </Card>
+
+      {/* Google Sheet Access Card */}
+      <RequestAccessCard connected={isConnected} />
 
       {/* Stats Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
