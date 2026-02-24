@@ -3,10 +3,12 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "allys_777_admin";
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | undefined>;
+  retries?: number;
+  timeoutMs?: number;
 }
 
 async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { params, ...fetchOpts } = options;
+  const { params, retries = 1, timeoutMs = 30000, ...fetchOpts } = options;
 
   let url = `${API_URL}${path}`;
   if (params) {
@@ -20,21 +22,40 @@ async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T>
     if (qs) url += `?${qs}`;
   }
 
-  const res = await fetch(url, {
-    ...fetchOpts,
-    headers: {
-      "X-Api-Key": API_KEY,
-      "Content-Type": "application/json",
-      ...fetchOpts.headers,
-    },
-  });
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(error.detail || error.message || `API error ${res.status}`);
+      const res = await fetch(url, {
+        ...fetchOpts,
+        signal: controller.signal,
+        headers: {
+          "X-Api-Key": API_KEY,
+          "Content-Type": "application/json",
+          ...fetchOpts.headers,
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(error.detail || error.message || `API error ${res.status}`);
+      }
+
+      return res.json();
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (attempt < retries) {
+        // Wait before retry (exponential backoff: 1s, 2s)
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+      }
+    }
   }
 
-  return res.json();
+  throw lastError!;
 }
 
 // Session endpoints
@@ -149,7 +170,7 @@ export async function getContacts(page = 1, limit = 50, search?: string) {
 }
 
 export async function getStats() {
-  return apiFetch<Stats>("/api/stats");
+  return apiFetch<Stats>("/api/stats", { retries: 2, timeoutMs: 45000 });
 }
 
 export async function getHealth() {

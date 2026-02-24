@@ -17,7 +17,10 @@ import {
   CheckCircle,
   AlertTriangle,
   XCircle,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -28,18 +31,29 @@ export default function DashboardPage() {
   const [session, setSession] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [statsError, setStatsError] = useState(false);
+
   useEffect(() => {
     async function load() {
       try {
-        const [s, h, sess] = await Promise.all([
-          getStats().catch(() => null),
+        // Load session and health first (fast), then stats (may be slow on first load)
+        const [h, sess] = await Promise.all([
           getHealth().catch(() => null),
           getSession().catch(() => null),
         ]);
-        setStats(s);
         setHealth(h);
         setSession(sess);
-      } finally {
+        setLoading(false);
+
+        // Stats may take longer on cold start (reads from Google Sheets)
+        try {
+          const s = await getStats();
+          setStats(s);
+          setStatsError(false);
+        } catch {
+          setStatsError(true);
+        }
+      } catch {
         setLoading(false);
       }
     }
@@ -121,7 +135,11 @@ export default function DashboardPage() {
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.total_messages ?? 0}</div>
+            {stats === null && !statsError ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-3xl font-bold">{stats?.total_messages ?? 0}</div>
+            )}
           </CardContent>
         </Card>
 
@@ -133,7 +151,11 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.total_contacts ?? 0}</div>
+            {stats === null && !statsError ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-3xl font-bold">{stats?.total_contacts ?? 0}</div>
+            )}
           </CardContent>
         </Card>
 
@@ -145,13 +167,19 @@ export default function DashboardPage() {
             <Filter className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.total_groups ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Filter: {stats?.filter_mode ?? "unknown"}
-              {stats?.active_filter_groups
-                ? ` (${stats.active_filter_groups} active)`
-                : ""}
-            </p>
+            {stats === null && !statsError ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold">{stats?.total_groups ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Filter: {stats?.filter_mode ?? "unknown"}
+                  {stats?.active_filter_groups
+                    ? ` (${stats.active_filter_groups} active)`
+                    : ""}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -163,13 +191,43 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.queue_depth ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.queue_completed ?? 0} processed, {stats?.queue_failed ?? 0} failed
-            </p>
+            {stats === null && !statsError ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <div className="text-3xl font-bold">{stats?.queue_depth ?? 0}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats?.queue_completed ?? 0} processed, {stats?.queue_failed ?? 0} failed
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Retry button if stats failed */}
+      {statsError && (
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <span>Stats loading slowly (large dataset). </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              setStatsError(false);
+              try {
+                const s = await getStats();
+                setStats(s);
+              } catch {
+                setStatsError(true);
+              }
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            Retry
+          </Button>
+        </div>
+      )}
 
       {/* Health Status */}
       {health && (
